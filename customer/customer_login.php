@@ -75,54 +75,53 @@ Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac tu
 
 <?php
 
-if(isset($_POST['login'])){
+if (isset($_POST['login'])) {
 
-$customer_email = $_POST['c_email'];
+    $customer_email = $_POST['c_email'];
+    $customer_pass = $_POST['c_pass'];
 
-$customer_pass = $_POST['c_pass'];
+    $select_customer = "SELECT * FROM customers WHERE customer_email='$customer_email' AND customer_pass='$customer_pass'";
+    $run_customer = mysqli_query($con, $select_customer);
 
-$select_customer = "select * from customers where customer_email='$customer_email' AND customer_pass='$customer_pass'";
+    $get_ip = getRealUserIp();
+    $check_customer = mysqli_num_rows($run_customer);
 
-$run_customer = mysqli_query($con,$select_customer);
+    $select_cart = "SELECT * FROM cart WHERE ip_add='$get_ip'";
+    $run_cart = mysqli_query($con, $select_cart);
+    $check_cart = mysqli_num_rows($run_cart);
 
-$get_ip = getRealUserIp();
+    if ($check_customer == 0) {
+        $errorMessage = 'Invalid login attempt: ' . $customer_email;
+        logMessage($errorMessage, 'Login Attempt'); // Log unsuccessful login attempt
+        echo "<script>alert('password or email is wrong')</script>";
+        exit();
+    }
 
-$check_customer = mysqli_num_rows($run_customer);
-
-$select_cart = "select * from cart where ip_add='$get_ip'";
-
-$run_cart = mysqli_query($con,$select_cart);
-
-$check_cart = mysqli_num_rows($run_cart);
-
-if($check_customer==0){
-
-echo "<script>alert('password or email is wrong')</script>";
-
-exit();
-
+    if ($check_customer == 1 AND $check_cart == 0) {
+        $_SESSION['customer_email'] = $customer_email;
+        $successMessage = 'User logged in: ' . $customer_email;
+        logMessage($successMessage, 'Login Success'); // Log successful login
+        echo "<script>alert('You are Logged In')</script>";
+        echo "<script>window.open('customer/my_account.php?my_orders','_self')</script>";
+    } else {
+        $_SESSION['customer_email'] = $customer_email;
+        $successMessage = 'User logged in with cart: ' . $customer_email;
+        logMessage($successMessage, 'Login Success with Cart'); // Log successful login with cart
+        echo "<script>alert('You are Logged In')</script>";
+        echo "<script>window.open('checkout.php','_self')</script>";
+    }
 }
 
-if($check_customer==1 AND $check_cart==0){
+// Function to log messages into the audit_log table
+function logMessage($details, $action = 'Login Attempt') {
+    global $con;
 
-$_SESSION['customer_email']=$customer_email;
-
-echo "<script>alert('You are Logged In')</script>";
-
-echo "<script>window.open('customer/my_account.php?my_orders','_self')</script>";
-
-}
-else {
-
-$_SESSION['customer_email']=$customer_email;
-
-echo "<script>alert('You are Logged In')</script>";
-
-echo "<script>window.open('checkout.php','_self')</script>";
-
-} 
-
-
+    $user_id = ''; // Set the user ID if applicable, or leave it empty
+    $timestamp = date('Y-m-d H:i:s');
+    
+    $insert_log = "INSERT INTO audit_log (user_id, timestamp, action, details) 
+                   VALUES ('$user_id', '$timestamp', '$action', '$details')";
+    mysqli_query($con, $insert_log);
 }
 
 ?>
