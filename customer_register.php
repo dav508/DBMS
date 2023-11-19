@@ -327,121 +327,97 @@ if(val.length<=6)no=1;
 
 <?php
 
-if(isset($_POST['register'])){
+if (isset($_POST['register'])) {
+  $secret = "YOUR_RECAPTCHA_SECRET_KEY";
+  $response = $_POST['g-recaptcha-response'];
+  $remoteip = $_SERVER['REMOTE_ADDR'];
+  $url = file_get_contents("https://www.google.com/recaptcha/api/siteverify?secret=$secret&response=$response&remoteip=$remoteip");
+  $result = json_decode($url, TRUE);
+// Bypass Captcha Check (for testing purposes)
+$result['success'] = 1;
+  
+    // $secret = "6LcHnoQaAAAAAF3_pqQ55sZMDgaWCGcXq4ucLgkH";
+    // $response = $_POST['g-recaptcha-response'];
+    $remoteip = $_SERVER['REMOTE_ADDR'];
+    // $url = file_get_contents("https://www.google.com/recaptcha/api/siteverify?secret=$secret&response=$response&remoteip=$remoteip");
+    // $result = json_decode($url, TRUE);
 
-// $secret = "6LcHnoQaAAAAAF3_pqQ55sZMDgaWCGcXq4ucLgkH";
+    if ($result['success'] == 0) {
+        $errorMessage = 'Captcha verification failed for email: ' . $_POST['c_email'];
+        logMessage($errorMessage, 'Registration Attempt');
+        echo "<script>alert('Please Select Captcha, Try Again')</script>";
+    } else {
+        $c_name = $_POST['c_name'];
+        $c_email = $_POST['c_email'];
+        $c_pass = $_POST['c_pass'];
+        $c_country = $_POST['c_country'];
+        $c_city = $_POST['c_city'];
+        $c_contact = $_POST['c_contact'];
+        $c_address = $_POST['c_address'];
+        $c_image = $_FILES['c_image']['name'];
+        $c_image_tmp = $_FILES['c_image']['tmp_name'];
+        $c_ip = getRealUserIp();
 
-// $response = $_POST['g-recaptcha-response'];
+        move_uploaded_file($c_image_tmp, "customer/customer_images/$c_image");
 
-$remoteip = $_SERVER['REMOTE_ADDR'];
+        $get_email = "SELECT * FROM customers WHERE customer_email='$c_email'";
+        $run_email = mysqli_query($con, $get_email);
+        $check_email = mysqli_num_rows($run_email);
 
-// $url = file_get_contents("https://www.google.com/recaptcha/api/siteverify?secret=$secret&response=$response&remoteip=$remoteip");
+        if ($check_email == 1) {
+            $errorMessage = 'Email already registered: ' . $c_email;
+            logMessage($errorMessage, 'Registration Attempt');
+            echo "<script>alert('This email is already registered, try another one')</script>";
+            exit();
+        }
 
-// $result = json_decode($url, TRUE);
+        $customer_confirm_code = mt_rand();
+        $subject = "Email Confirmation Message";
+        $from = "sad.ahmed22224@gmail.com";
+        $message = "
+            <h2>Email Confirmation By Computerfever.com $c_name</h2>
+            <a href='localhost/ecom_store/customer/my_account.php?$customer_confirm_code'>
+                Click Here To Confirm Email
+            </a>
+        ";
+        $headers = "From: $from \r\n";
+        $headers .= "Content-type: text/html\r\n";
+        mail($c_email, $subject, $message, $headers);
 
-if($result['success'] == 0){
+        $insert_customer = "INSERT INTO customers (customer_name, customer_email, customer_pass, customer_country, customer_city, customer_contact, customer_address, customer_image, customer_ip, customer_confirm_code)
+                            VALUES ('$c_name','$c_email','$c_pass','$c_country','$c_city','$c_contact','$c_address','$c_image','$c_ip','$customer_confirm_code')";
+        $run_customer = mysqli_query($con, $insert_customer);
 
-$c_name = $_POST['c_name'];
+        $sel_cart = "SELECT * FROM cart WHERE ip_add='$c_ip'";
+        $run_cart = mysqli_query($con, $sel_cart);
+        $check_cart = mysqli_num_rows($run_cart);
 
-$c_email = $_POST['c_email'];
-
-$c_pass = $_POST['c_pass'];
-
-$c_country = $_POST['c_country'];
-
-$c_city = $_POST['c_city'];
-
-$c_contact = $_POST['c_contact'];
-
-$c_address = $_POST['c_address'];
-
-$c_image = $_FILES['c_image']['name'];
-
-$c_image_tmp = $_FILES['c_image']['tmp_name'];
-
-$c_ip = getRealUserIp();
-
-move_uploaded_file($c_image_tmp,"customer/customer_images/$c_image");
-
-$get_email = "select * from customers where customer_email='$c_email'";
-
-$run_email = mysqli_query($con,$get_email);
-
-$check_email = mysqli_num_rows($run_email);
-
-if($check_email == 1){
-
-echo "<script>alert('This email is already registered, try another one')</script>";
-
-exit();
-
+        if ($check_cart > 0) {
+            $_SESSION['customer_email'] = $c_email;
+            $successMessage = 'User registered successfully with cart: ' . $c_email;
+            logMessage($successMessage, 'Registration Success with Cart');
+            echo "<script>alert('You have been Registered Successfully')</script>";
+            echo "<script>window.open('checkout.php','_self')</script>";
+        } else {
+            $_SESSION['customer_email'] = $c_email;
+            $successMessage = 'User registered successfully: ' . $c_email;
+            logMessage($successMessage, 'Registration Success');
+            echo "<script>alert('You have been Registered Successfully')</script>";
+            echo "<script>window.open('index.php','_self')</script>";
+        }
+    }
 }
 
-$customer_confirm_code = mt_rand();
+// Function to log messages into the audit_log table
+function logMessage($details, $action = 'Registration Attempt') {
+    global $con;
 
-$subject = "Email Confirmation Message";
+    $user_id = ''; // Set the user ID if applicable, or leave it empty
+    $timestamp = date('Y-m-d H:i:s');
 
-$from = "sad.ahmed22224@gmail.com";
-
-$message = "
-
-<h2>
-Email Confirmation By Computerfever.com $c_name
-</h2>
-
-<a href='localhost/ecom_store/customer/my_account.php?$customer_confirm_code'>
-
-Click Here To Confirm Email
-
-</a>
-
-";
-
-$headers = "From: $from \r\n";
-
-$headers .= "Content-type: text/html\r\n";
-
-mail($c_email,$subject,$message,$headers);
-
-$insert_customer = "insert into customers (customer_name,customer_email,customer_pass,customer_country,customer_city,customer_contact,customer_address,customer_image,customer_ip,customer_confirm_code) values ('$c_name','$c_email','$c_pass','$c_country','$c_city','$c_contact','$c_address','$c_image','$c_ip','$customer_confirm_code')";
-
-
-$run_customer = mysqli_query($con,$insert_customer);
-
-$sel_cart = "select * from cart where ip_add='$c_ip'";
-
-$run_cart = mysqli_query($con,$sel_cart);
-
-$check_cart = mysqli_num_rows($run_cart);
-
-if($check_cart>0){
-
-$_SESSION['customer_email']=$c_email;
-
-echo "<script>alert('You have been Registered Successfully')</script>";
-
-echo "<script>window.open('checkout.php','_self')</script>";
-
-}else{
-
-$_SESSION['customer_email']=$c_email;
-
-echo "<script>alert('You have been Registered Successfully')</script>";
-
-echo "<script>window.open('index.php','_self')</script>";
-
-
-}
-
-
-}
-else{
-
-echo "<script>alert('Please Select Captcha, Try Again')</script>";
-
-}
-
-
+    $insert_log = "INSERT INTO audit_log (user_id, timestamp, action, details) 
+                   VALUES ('$user_id', '$timestamp', '$action', '$details')";
+    mysqli_query($con, $insert_log);
 }
 
 ?>
